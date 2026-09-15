@@ -1,0 +1,14 @@
+{
+  "messages": {
+    "evaluated": "analysis.messages.evaluated",
+    "history": "analysis.messages.history",
+    "no_credits": "analysis.messages.no_credits",
+    "cv_required": "analysis.messages.cv_required",
+    "cv_unreadable": "analysis.messages.cv_unreadable",
+    "invalid_pdf": "analysis.messages.invalid_pdf",
+    "file_too_large": "analysis.messages.file_too_large",
+    "job_required": "analysis.messages.job_required",
+    "session_required": "analysis.messages.session_required",
+    "session_not_found": "analysis.messages.session_not_found"
+  }
+}

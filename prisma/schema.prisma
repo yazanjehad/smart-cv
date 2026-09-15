@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// NOTE: pgvector support is optional.
+// To enable vector similarity search, install the extension in Postgres:
+//   CREATE EXTENSION IF NOT EXISTS vector;
+// Then add e.g. `embedding Unsupported("vector(768)")?` to Candidate/Match models.
+
+enum CandidateStatus {
+  PENDING
+  PARSED
+  FAILED
+}
+
+enum MatchStatus {
+  SHORTLISTED
+  MATCHED
+  REJECTED
+}
+
+// Unified SaaS identity: registered users (email set) or guest/free-trial sessions.
+// `sessionToken` carries a unique (indexed) constraint used for guest session lookup.
+model User {
+  id           String            @id @default(uuid())
+  email        String?           @unique
+  sessionToken String            @unique
+  credits      Int               @default(5)
+  candidates   Candidate[]
+  jobs         Job[]
+  analyses     AnalysisHistory[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@map("users")
+}
+
+// NOTE: `email` is intentionally NOT unique — a Candidate row is an immutable
+// parsed-CV snapshot owned by the requesting user (guest session or account),
+// so the same person's CV may legitimately be analyzed by several users and
+// several times, each run keeping its own snapshot + AnalysisHistory row.
+model Candidate {
+  id         String            @id @default(uuid())
+  userId     String?
+  fullName   String?
+  email      String?
+  phone      String?
+  location   String?
+  title      String?
+  summary    String?
+  skills     String[]          @default([])
+  languages  String[]          @default([])
+  rawText    String?           @db.Text
+  structured Json?
+  fileName   String?
+  fileUrl    String?
+  status     CandidateStatus   @default(PENDING)
+  yearsOfExp Float?
+  user       User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  matches    MatchResult[]     @relation("CandidateMatches")
+  analyses   AnalysisHistory[]
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  @@index([email])
+  @@index([userId])
+  @@map("candidates")
+}
+
+model Job {
+  id             String            @id @default(uuid())
+  userId         String?
+  title          String
+  company        String?
+  location       String?
+  employmentType String?
+  description    String            @db.Text
+  requirements   String[]          @default([])
+  skills         String[]          @default([])
+  structured     Json?
+  minYearsExp    Float?
+  isActive       Boolean           @default(true)
+  user           User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  matches        MatchResult[]     @relation("JobMatches")
+  analyses       AnalysisHistory[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([userId])
+  @@map("jobs")
+}
+
+model MatchResult {
+  id            String      @id @default(uuid())
+  candidateId   String
+  jobId         String
+  score         Float
+  status        MatchStatus @default(SHORTLISTED)
+  strengths     String[]    @default([])
+  missingSkills String[]    @default([])
+  reasoning     String?     @db.Text
+  rawOutput     Json?
+  candidate     Candidate   @relation("CandidateMatches", fields: [candidateId], references: [id], onDelete: Cascade)
+  job           Job         @relation("JobMatches", fields: [jobId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+
+  @@unique([candidateId, jobId])
+  @@index([candidateId])
+  @@index([jobId])
+  @@index([score])
+  @@index([status])
+  @@map("match_results")
+}
+
+// Unified SaaS result model: one row per end-to-end "evaluate" run
+// (CV + Job -> Gemini parse -> score -> tailored advice), scoped to the
+// owning user/session for history tracking and usage analytics.
+model AnalysisHistory {
+  id             String      @id @default(uuid())
+  userId         String
+  candidateId    String
+  jobId          String
+  matchScore     Float
+  status         MatchStatus @default(SHORTLISTED)
+  strengths      String[]    @default([])
+  missingSkills  String[]    @default([])
+  reasoning      String?     @db.Text
+  tailoredAdvice Json?
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  candidate      Candidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job            Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  createdAt      DateTime    @default(now())
+
+  @@index([userId])
+  @@index([candidateId])
+  @@index([jobId])
+  @@index([status])
+  @@index([matchScore])
+  @@map("analysis_history")
+}

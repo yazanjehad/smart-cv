@@ -1,0 +1,52 @@
+{
+  "validation": {
+    "required": "validation.required",
+    "string": "validation.string",
+    "email": "validation.email",
+    "array": "validation.array",
+    "number": "validation.number",
+    "uuid": "validation.uuid",
+    "boolean": "validation.boolean",
+    "min": "validation.min"
+  },
+  "candidates": {
+    "messages": {
+      "created": "candidates.messages.created",
+      "list": "candidates.messages.list",
+      "detail": "candidates.messages.detail",
+      "updated": "candidates.messages.updated",
+      "deleted": "candidates.messages.deleted",
+      "not_found": "candidates.messages.not_found"
+    }
+  },
+  "jobs": {
+    "messages": {
+      "created": "jobs.messages.created",
+      "list": "jobs.messages.list",
+      "detail": "jobs.messages.detail",
+      "updated": "jobs.messages.updated",
+      "deleted": "jobs.messages.deleted",
+      "not_found": "jobs.messages.not_found"
+    }
+  },
+  "parser": {
+    "messages": {
+      "parse_success": "parser.messages.parse_success",
+      "no_raw_text": "parser.messages.no_raw_text"
+    }
+  },
+  "matching": {
+    "messages": {
+      "evaluated": "matching.messages.evaluated",
+      "top_candidates": "matching.messages.top_candidates",
+      "candidate_matches": "matching.messages.candidate_matches"
+    }
+  },
+  "common": {
+    "errors": {
+      "internal_server_error": "common.errors.internal_server_error",
+      "bad_request": "common.errors.bad_request",
+      "payment_required": "common.errors.payment_required"
+    }
+  }
+}
