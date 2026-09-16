@@ -1,0 +1,11 @@
+{
+  "messages": {
+    "profile": "Account profile retrieved successfully",
+    "list": "Accounts retrieved successfully",
+    "credits_granted": "Credits granted successfully (+{credits})",
+    "subscription_updated": "Subscription updated successfully"
+  },
+  "errors": {
+    "not_found": "Account not found"
+  }
+}

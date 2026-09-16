@@ -24,26 +24,77 @@ enum MatchStatus {
   REJECTED
 }
 
-// Unified SaaS identity: registered users (email set) or guest/free-trial sessions.
-// `sessionToken` carries a unique (indexed) constraint used for guest session lookup.
+// RBAC roles:
+//   SUPER_ADMIN -> platform oversight, subscriptions, credit consumption.
+//   RECRUITER   -> owns jobs and matches many CVs against them.
+//   JOB_SEEKER  -> matches their own CV and gets tailoring advice.
+enum Role {
+  SUPER_ADMIN
+  RECRUITER
+  JOB_SEEKER
+}
+
+enum SubscriptionPlan {
+  FREE_TRIAL
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+// Registered SaaS identity. Every request is authenticated with a JWT whose
+// subject is `User.id`; `role` drives RBAC (`RolesGuard`) and `credits` is the
+// per-account usage balance consumed by the CV-matching pipeline.
 model User {
   id           String            @id @default(uuid())
-  email        String?           @unique
-  sessionToken String            @unique
+  email        String            @unique
+  passwordHash String
+  fullName     String?
+  role         Role              @default(JOB_SEEKER)
   credits      Int               @default(5)
+  isActive     Boolean           @default(true)
+  lastLoginAt  DateTime?
+  subscription Subscription?
   candidates   Candidate[]
   jobs         Job[]
   analyses     AnalysisHistory[]
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 
+  @@index([role])
   @@map("users")
 }
 
+// Billing/entitlement record (1-1 with User). SUPER_ADMIN manages the plan and
+// monitors consumption through `creditsUsed` vs `creditsPerCycle`.
+model Subscription {
+  id                 String             @id @default(uuid())
+  userId             String             @unique
+  plan               SubscriptionPlan   @default(FREE_TRIAL)
+  status             SubscriptionStatus @default(ACTIVE)
+  creditsPerCycle    Int                @default(5)
+  creditsUsed        Int                @default(0)
+  currentPeriodStart DateTime           @default(now())
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean            @default(false)
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([status])
+  @@index([plan])
+  @@map("subscriptions")
+}
+
 // NOTE: `email` is intentionally NOT unique — a Candidate row is an immutable
-// parsed-CV snapshot owned by the requesting user (guest session or account),
-// so the same person's CV may legitimately be analyzed by several users and
-// several times, each run keeping its own snapshot + AnalysisHistory row.
+// parsed-CV snapshot owned by the requesting account, so the same person's CV
+// may legitimately be analyzed by several users and several times, each run
+// keeping its own snapshot + AnalysisHistory row.
 model Candidate {
   id         String            @id @default(uuid())
   userId     String?
@@ -119,7 +170,7 @@ model MatchResult {
 
 // Unified SaaS result model: one row per end-to-end "evaluate" run
 // (CV + Job -> Gemini parse -> score -> tailored advice), scoped to the
-// owning user/session for history tracking and usage analytics.
+// owning user account for history tracking and usage analytics.
 model AnalysisHistory {
   id             String      @id @default(uuid())
   userId         String

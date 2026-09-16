@@ -1,14 +1,4 @@
 {
-  "validation": {
-    "required": "validation.required",
-    "string": "validation.string",
-    "email": "validation.email",
-    "array": "validation.array",
-    "number": "validation.number",
-    "uuid": "validation.uuid",
-    "boolean": "validation.boolean",
-    "min": "validation.min"
-  },
   "candidates": {
     "messages": {
       "created": "candidates.messages.created",
@@ -44,9 +34,9 @@
   },
   "common": {
     "errors": {
-      "internal_server_error": "common.errors.internal_server_error",
-      "bad_request": "common.errors.bad_request",
-      "payment_required": "common.errors.payment_required"
+      "internal_server_error": "Internal server error",
+      "bad_request": "Invalid request",
+      "payment_required": "This operation requires available credits, please upgrade to continue"
     }
   }
 }

@@ -1,14 +1,14 @@
 {
   "messages": {
-    "evaluated": "analysis.messages.evaluated",
-    "history": "analysis.messages.history",
-    "no_credits": "analysis.messages.no_credits",
-    "cv_required": "analysis.messages.cv_required",
-    "cv_unreadable": "analysis.messages.cv_unreadable",
-    "invalid_pdf": "analysis.messages.invalid_pdf",
-    "file_too_large": "analysis.messages.file_too_large",
-    "job_required": "analysis.messages.job_required",
-    "session_required": "analysis.messages.session_required",
-    "session_not_found": "analysis.messages.session_not_found"
+    "evaluated": "CV vs job evaluation completed successfully",
+    "history": "Analysis history retrieved successfully",
+    "no_credits": "You have used all your available credits, please upgrade to continue",
+    "cv_required": "A CV file in PDF format is required",
+    "cv_unreadable": "Could not extract text from the CV file",
+    "invalid_pdf": "Invalid uploaded file: PDF format is required",
+    "file_too_large": "The uploaded file exceeds the maximum allowed size",
+    "job_required": "Provide the job description as text or as a PDF file",
+    "session_required": "Session identifier is required",
+    "session_not_found": "Session not found"
   }
 }

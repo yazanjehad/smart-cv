@@ -1,16 +1,18 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { MatchStatus } from '@prisma/client';
-import {
-  AnalyzeInput,
-  AnalysisService,
-  deriveMatchStatus,
-} from './analysis.service';
+import { BadRequestException } from '@nestjs/common';
+import { MatchStatus, Role } from '@prisma/client';
 import { PaymentRequiredException } from '../../common/exceptions/payment-required.exception';
 import type {
   AnalysisResult,
   ParsedCv,
   ParsedJob,
 } from '../ai/interfaces/ai-provider.interface';
+import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
+import { UsersService } from '../users/users.service';
+import {
+  AnalyzeInput,
+  AnalysisService,
+  deriveMatchStatus,
+} from './analysis.service';
 
 const parsedCv: ParsedCv = {
   fullName: 'Yazan Almasri',
@@ -62,13 +64,21 @@ const pdfFile = {
   size: 13,
 } as Express.Multer.File;
 
+const jobSeekerBase: AuthenticatedUser = {
+  id: 'user-1',
+  email: 'job.seeker@example.com',
+  fullName: 'Yazan Almasri',
+  role: Role.JOB_SEEKER,
+  credits: 5,
+  isActive: true,
+};
+
+/** Builds the service with a mocked Prisma/Gemini stack and the real credit guard. */
 function createHarness(
   options: { credits?: number; updateManyCount?: number } = {},
 ) {
-  const user = {
-    id: 'user-1',
-    sessionToken: 'session-1',
-    email: null,
+  const user: AuthenticatedUser = {
+    ...jobSeekerBase,
     credits: options.credits ?? 5,
   };
 
@@ -95,15 +105,11 @@ function createHarness(
         .fn()
         .mockResolvedValue({ count: options.updateManyCount ?? 1 }),
     },
+    subscription: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
   };
 
   const prisma = {
     $transaction: jest.fn((cb: (client: unknown) => unknown) => cb(tx)),
-    user: {
-      findUnique: jest
-        .fn()
-        .mockResolvedValue(options.credits === -1 ? null : user),
-    },
     analysisHistory: { findMany: jest.fn().mockResolvedValue([created]) },
   };
 
@@ -114,155 +120,222 @@ function createHarness(
   };
 
   const pdfExtractor = {
-    extractText: jest.fn().mockResolvedValue('raw resume text'),
+    extractText: jest.fn().mockResolvedValue('Extracted document text'),
   };
 
-  const users = {
-    resolveSessionToken: jest.fn().mockReturnValue('session-1'),
-    getOrCreateBySessionToken: jest.fn().mockResolvedValue(user),
-    assertHasCredits: jest.fn((candidate: { credits: number }) => {
-      if (candidate.credits <= 0) {
-        throw new PaymentRequiredException('analysis.messages.no_credits');
-      }
-    }),
-  };
+  const config = { get: jest.fn().mockReturnValue(5) };
+  const users = new UsersService(prisma as never, config as never);
 
   const service = new AnalysisService(
     prisma as never,
     gemini as never,
     pdfExtractor as never,
-    users as never,
+    users,
   );
 
-  return { service, prisma, tx, gemini, pdfExtractor, users };
+  return { service, prisma, tx, gemini, pdfExtractor, user, created };
 }
-describe('AnalysisService.evaluate', () => {
-  it('runs the full pipeline and persists everything in one transaction', async () => {
-    const { service, prisma, tx, gemini, pdfExtractor } = createHarness();
-    const input: AnalyzeInput = {
-      cvFile: pdfFile,
-      jobDescription: 'We need a Senior Backend Engineer with NestJS.',
-    };
 
-    const result = await service.evaluate(input);
+const asInput = (
+  user: AuthenticatedUser,
+  overrides: Partial<AnalyzeInput> = {},
+): AnalyzeInput => ({ user, ...overrides });
 
-    expect(pdfExtractor.extractText).toHaveBeenCalledTimes(1);
-    expect(gemini.parseCv).toHaveBeenCalledWith('raw resume text');
-    expect(gemini.parseJob).toHaveBeenCalledWith(input.jobDescription);
+describe('AnalysisService.evaluate (JWT-driven pipeline)', () => {
+  it('runs the full pipeline and returns role + credits from req.user', async () => {
+    const { service, tx, gemini, pdfExtractor, user } = createHarness();
+
+    const result = await service.evaluate(
+      asInput(user, {
+        cvFile: pdfFile,
+        jobDescription: 'Senior Backend Engineer — NestJS, PostgreSQL',
+      }),
+    );
+
+    expect(pdfExtractor.extractText).toHaveBeenCalledWith(pdfFile.buffer);
+    expect(gemini.parseCv).toHaveBeenCalledWith('Extracted document text');
+    expect(gemini.parseJob).toHaveBeenCalledWith(
+      'Senior Backend Engineer — NestJS, PostgreSQL',
+    );
     expect(gemini.evaluateAndTailor).toHaveBeenCalledWith(parsedCv, parsedJob);
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
 
-    expect(tx.candidate.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        userId: 'user-1',
-        email: 'yazan@example.com',
+    expect(tx.candidate.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ userId: user.id }),
       }),
-    });
-    expect(tx.job.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ title: 'Senior Backend Engineer' }),
-    });
-    expect(tx.analysisHistory.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        candidateId: 'candidate-1',
-        jobId: 'job-1',
-        matchScore: 62,
-        status: MatchStatus.SHORTLISTED,
+    );
+    expect(tx.job.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ userId: user.id }),
       }),
-    });
-    expect(tx.user.updateMany).toHaveBeenCalledWith({
-      where: { id: 'user-1', credits: { gt: 0 } },
-      data: { credits: { decrement: 1 } },
-    });
+    );
+    expect(tx.analysisHistory.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          userId: user.id,
+          candidateId: 'candidate-1',
+          jobId: 'job-1',
+          status: MatchStatus.SHORTLISTED,
+        }),
+      }),
+    );
 
     expect(result.message).toBe('analysis.messages.evaluated');
+    expect(result.data.role).toBe(Role.JOB_SEEKER);
     expect(result.data.creditsRemaining).toBe(4);
-    expect(result.data.sessionToken).toBe('session-1');
+    expect(result.data.userId).toBe(user.id);
+    expect(result.data.jobTitle).toBe('Senior Backend Engineer');
     expect(result.data.parsedJob).toEqual(parsedJob);
-    expect(result.data.tailoredAdvice).toEqual(evaluation.tailoredAdvice);
   });
 
-  it('reads the job PDF when no job description text is provided', async () => {
-    const { service, pdfExtractor } = createHarness();
+  it('deducts exactly one credit and mirrors the usage on the subscription', async () => {
+    const { service, tx, user } = createHarness();
+    await service.evaluate(
+      asInput(user, {
+        cvFile: pdfFile,
+        jobDescription: 'Senior Backend Engineer',
+      }),
+    );
 
-    await service.evaluate({ cvFile: pdfFile, jobFile: pdfFile });
+    expect(tx.user.updateMany).toHaveBeenCalledWith({
+      where: { id: user.id, credits: { gt: 0 } },
+      data: { credits: { decrement: 1 } },
+    });
+    expect(tx.subscription.updateMany).toHaveBeenCalledWith({
+      where: { userId: user.id },
+      data: { creditsUsed: { increment: 1 } },
+    });
+  });
+
+  it('falls back to the uploaded job PDF when no job text is sent', async () => {
+    const { service, pdfExtractor, gemini, user } = createHarness();
+    const jobFile = {
+      ...pdfFile,
+      fieldname: 'jobFile',
+      originalname: 'job.pdf',
+    };
+
+    await service.evaluate(asInput(user, { cvFile: pdfFile, jobFile }));
 
     expect(pdfExtractor.extractText).toHaveBeenCalledTimes(2);
+    expect(pdfExtractor.extractText).toHaveBeenCalledWith(jobFile.buffer);
+    expect(gemini.parseJob).toHaveBeenCalledWith('Extracted document text');
+  });
+
+  it('rejects an unauthenticated-credit-less account with 402 before any parsing', async () => {
+    const { service, pdfExtractor, gemini, user } = createHarness({
+      credits: 0,
+    });
+
+    await expect(service.evaluate(asInput(user))).rejects.toThrow(
+      PaymentRequiredException,
+    );
+    expect(pdfExtractor.extractText).not.toHaveBeenCalled();
+    expect(gemini.parseCv).not.toHaveBeenCalled();
+  });
+
+  it('rolls back (402) when the atomic decrement loses the race', async () => {
+    const { service, tx, user } = createHarness({ updateManyCount: 0 });
+
+    await expect(
+      service.evaluate(
+        asInput(user, {
+          cvFile: pdfFile,
+          jobDescription: 'Senior Backend Engineer',
+        }),
+      ),
+    ).rejects.toThrow(PaymentRequiredException);
+    expect(tx.subscription.updateMany).not.toHaveBeenCalled();
   });
 
   it('rejects a request without a CV before calling Gemini', async () => {
-    const { service, gemini } = createHarness();
+    const { service, gemini, user } = createHarness();
 
     await expect(
-      service.evaluate({ jobDescription: 'Senior Backend Engineer' }),
+      service.evaluate(
+        asInput(user, { jobDescription: 'Senior Backend Engineer' }),
+      ),
     ).rejects.toThrow(BadRequestException);
     expect(gemini.parseCv).not.toHaveBeenCalled();
   });
 
   it('rejects a non-PDF upload', async () => {
-    const { service } = createHarness();
-    const txt = { ...pdfFile, mimetype: 'text/plain', originalname: 'cv.txt' };
+    const { service, gemini, user } = createHarness();
+    const docFile = {
+      ...pdfFile,
+      originalname: 'cv.docx',
+      mimetype:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    };
 
     await expect(
-      service.evaluate({ cvFile: txt, jobDescription: 'JD' }),
+      service.evaluate(
+        asInput(user, {
+          cvFile: docFile,
+          jobDescription: 'Senior Backend Engineer',
+        }),
+      ),
     ).rejects.toThrow(BadRequestException);
+    expect(gemini.parseCv).not.toHaveBeenCalled();
   });
 
   it('rejects a request without a job description', async () => {
-    const { service } = createHarness();
-
-    await expect(service.evaluate({ cvFile: pdfFile })).rejects.toThrow(
-      BadRequestException,
-    );
-  });
-
-  it('throws 402 before extraction when the session has no credits', async () => {
-    const { service, pdfExtractor } = createHarness({ credits: 0 });
+    const { service, gemini, user } = createHarness();
 
     await expect(
-      service.evaluate({ cvFile: pdfFile, jobDescription: 'JD' }),
-    ).rejects.toThrow(PaymentRequiredException);
-    expect(pdfExtractor.extractText).not.toHaveBeenCalled();
-  });
-
-  it('rolls back with 402 when the credit decrement loses the race', async () => {
-    const { service } = createHarness({ updateManyCount: 0 });
-
-    await expect(
-      service.evaluate({ cvFile: pdfFile, jobDescription: 'JD' }),
-    ).rejects.toThrow(PaymentRequiredException);
+      service.evaluate(asInput(user, { cvFile: pdfFile })),
+    ).rejects.toThrow(BadRequestException);
+    expect(gemini.evaluateAndTailor).not.toHaveBeenCalled();
   });
 });
 
-describe('AnalysisService.history', () => {
-  it('returns the session history with remaining credits', async () => {
-    const { service } = createHarness({ credits: 3 });
+describe('AnalysisService.history (per-account scoping)', () => {
+  it('returns the account history with role and remaining credits', async () => {
+    const { service, prisma, user } = createHarness({ credits: 3 });
 
-    const result = await service.history('session-1');
+    const result = await service.history(user);
 
+    expect(prisma.analysisHistory.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: user.id }, take: 20 }),
+    );
     expect(result.message).toBe('analysis.messages.history');
     expect(result.data).toHaveLength(1);
-    expect(result.meta).toEqual({ total: 1, creditsRemaining: 3 });
+    expect(result.meta).toEqual({
+      total: 1,
+      creditsRemaining: 3,
+      role: Role.JOB_SEEKER,
+    });
   });
 
-  it('requires a session id', async () => {
-    const { service } = createHarness();
+  it('scopes the rows to whichever account is authenticated', async () => {
+    const { service, prisma } = createHarness();
+    const recruiter: AuthenticatedUser = {
+      ...jobSeekerBase,
+      id: 'user-2',
+      email: 'recruiter@company.com',
+      role: Role.RECRUITER,
+      credits: 50,
+    };
 
-    await expect(service.history(null)).rejects.toThrow(BadRequestException);
-  });
+    const result = await service.history(recruiter);
 
-  it('throws 404 for an unknown session', async () => {
-    const { service } = createHarness({ credits: -1 });
-
-    await expect(service.history('missing')).rejects.toThrow(NotFoundException);
+    expect(prisma.analysisHistory.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'user-2' } }),
+    );
+    expect(result.meta.role).toBe(Role.RECRUITER);
+    expect(result.meta.creditsRemaining).toBe(50);
   });
 });
 
 describe('deriveMatchStatus', () => {
-  it('maps scores to deterministic statuses', () => {
-    expect(deriveMatchStatus(95)).toBe(MatchStatus.MATCHED);
-    expect(deriveMatchStatus(80)).toBe(MatchStatus.MATCHED);
-    expect(deriveMatchStatus(62)).toBe(MatchStatus.SHORTLISTED);
-    expect(deriveMatchStatus(50)).toBe(MatchStatus.SHORTLISTED);
-    expect(deriveMatchStatus(49)).toBe(MatchStatus.REJECTED);
+  it.each([
+    [100, MatchStatus.MATCHED],
+    [80, MatchStatus.MATCHED],
+    [79.9, MatchStatus.SHORTLISTED],
+    [50, MatchStatus.SHORTLISTED],
+    [49.9, MatchStatus.REJECTED],
+    [0, MatchStatus.REJECTED],
+  ])('maps the score %s to %s', (score, expected) => {
+    expect(deriveMatchStatus(score)).toBe(expected);
   });
 });

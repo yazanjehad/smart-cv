@@ -25,6 +25,7 @@ import { CandidatesModule } from './modules/candidates/candidates.module';
 import { JobsModule } from './modules/jobs/jobs.module';
 import { MatchingModule } from './modules/matching/matching.module';
 import { AnalysisModule } from './modules/analysis/analysis.module';
+import { AuthModule } from './modules/auth/auth.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -60,6 +61,7 @@ import { AppService } from './app.service';
     CandidatesModule,
     JobsModule,
     MatchingModule,
+    AuthModule,
     AnalysisModule,
   ],
   controllers: [AppController],

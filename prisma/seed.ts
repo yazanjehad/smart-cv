@@ -8,12 +8,18 @@
  *
  *   1. Cleans all existing records (MatchResult -> Candidate -> Job, respecting
  *      foreign-key constraints).
- *   2. Inserts 3 Job Descriptions (NestJS backend, Full-Stack .NET/React,
+ *
+ *   2. Upserts 3 JWT/RBAC demo accounts (SUPER_ADMIN, RECRUITER, JOB_SEEKER)
+ *      with bcrypt-hashed passwords and their 1-1 subscription records.
+ *
+ *   3. Inserts 3 Job Descriptions (NestJS backend, Full-Stack .NET/React,
  *      AI Integration) with detailed descriptions and skill lists.
- *   3. Inserts 3 Candidate Profiles — each with a fully-structured parsed-CV
+ *
+ *   4. Inserts 3 Candidate Profiles — each with a fully-structured parsed-CV
  *      JSON payload, raw resume text, and realistic metadata (names in Arabic
  *      and English, mixed-language skills).
- *   4. Inserts 2 pre-calculated MatchResult evaluations:
+ *
+ *   5. Inserts 2 pre-calculated MatchResult evaluations:
  *      - Candidate 1 x Job 1 — 92.5% — MATCHED (strong alignment)
  *      - Candidate 2 x Job 1 — 58.0% — SHORTLISTED (partial match)
  *
@@ -23,7 +29,14 @@
  */
 
 import 'dotenv/config';
-import { PrismaClient, Prisma } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
+import {
+  PrismaClient,
+  Prisma,
+  Role,
+  SubscriptionPlan,
+  SubscriptionStatus,
+} from '@prisma/client';
 
 /* ═════════════════════════════════════════════════════════════════════════ */
 /*  Logger                                                                    */
@@ -492,6 +505,104 @@ const candidate3: Prisma.CandidateCreateInput = {
 };
 
 /* ═════════════════════════════════════════════════════════════════════════ */
+/*  RBAC demo accounts (JWT authentication)                                  */
+/* ═════════════════════════════════════════════════════════════════════════ */
+
+/** Shared password of the seeder accounts (rotate after the first login). */
+const DEMO_PASSWORD = 'SmartCv!2026';
+
+const demoAccounts: Array<{
+  email: string;
+  fullName: string;
+  role: Role;
+  credits: number;
+  plan: SubscriptionPlan;
+  status: SubscriptionStatus;
+  creditsPerCycle: number;
+}> = [
+  {
+    email: 'super.admin@smartcv.dev',
+    fullName: 'Platform Super Admin',
+    role: 'SUPER_ADMIN',
+    credits: 999,
+    plan: 'ENTERPRISE',
+    status: 'ACTIVE',
+    creditsPerCycle: 1000,
+  },
+  {
+    email: 'recruiter@company.com',
+    fullName: 'Nadia Haddad',
+    role: 'RECRUITER',
+    credits: 50,
+    plan: 'PRO',
+    status: 'ACTIVE',
+    creditsPerCycle: 50,
+  },
+  {
+    email: 'job.seeker@example.com',
+    fullName: 'Yazan Almasri',
+    role: 'JOB_SEEKER',
+    credits: 5,
+    plan: 'FREE_TRIAL',
+    status: 'ACTIVE',
+    creditsPerCycle: 5,
+  },
+];
+
+/**
+ * Idempotently upserts the demo accounts and their 1-1 subscriptions.
+ * Existing accounts are updated in place, so their data/analyses survive.
+ */
+async function seedAccounts(): Promise<Record<string, string>> {
+  SeedLogger.log(`Seeding ${demoAccounts.length} RBAC demo accounts…`);
+  const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
+  const ids: Record<string, string> = {};
+
+  for (const account of demoAccounts) {
+    const user = await prisma.user.upsert({
+      where: { email: account.email },
+      create: {
+        email: account.email,
+        passwordHash,
+        fullName: account.fullName,
+        role: account.role,
+        credits: account.credits,
+      },
+      update: {
+        passwordHash,
+        fullName: account.fullName,
+        role: account.role,
+        isActive: true,
+      },
+    });
+
+    await prisma.subscription.upsert({
+      where: { userId: user.id },
+      create: {
+        userId: user.id,
+        plan: account.plan,
+        status: account.status,
+        creditsPerCycle: account.creditsPerCycle,
+        creditsUsed: 0,
+        currentPeriodStart: new Date(),
+      },
+      update: {
+        plan: account.plan,
+        status: account.status,
+        creditsPerCycle: account.creditsPerCycle,
+      },
+    });
+
+    ids[account.role] = user.id;
+    SeedLogger.success(
+      `  • ${account.role} → ${account.email} (credits: ${account.credits})`,
+    );
+  }
+
+  return ids;
+}
+
+/* ═════════════════════════════════════════════════════════════════════════ */
 /*  Main — clean, insert, summarize                                          */
 /* ═════════════════════════════════════════════════════════════════════════ */
 
@@ -507,7 +618,10 @@ async function main(): Promise<void> {
   ]);
   SeedLogger.success('Existing records cleared.');
 
-  /* ── 2. Seed jobs (parallel) ── */
+  /* ── 2. Seed RBAC accounts (upsert) ── */
+  const accountIds = await seedAccounts();
+
+  /* ── 3. Seed jobs (parallel) ── */
   SeedLogger.log('Seeding 3 job descriptions…');
   const [job1Rec, job2Rec, job3Rec] = await Promise.all([
     prisma.job.create({ data: job1 }),
@@ -638,6 +752,10 @@ async function main(): Promise<void> {
   SeedLogger.success(' Seed completed successfully!');
   SeedLogger.success('═══════════════════════════════════════════════════');
   SeedLogger.log('Summary:');
+  SeedLogger.log(
+    `  Accounts:      ${Object.keys(accountIds).length}  (SUPER_ADMIN, RECRUITER, JOB_SEEKER)`,
+  );
+  SeedLogger.log(`  Password:      ${DEMO_PASSWORD}  (shared by the seeded accounts)`);
   SeedLogger.log('  Jobs:          3');
   SeedLogger.log('  Candidates:    3');
   SeedLogger.log('  MatchResults:  2  (1 MATCHED, 1 SHORTLISTED)');

@@ -18,21 +18,6 @@ export class AnalyzeRequestDto {
   @IsOptional()
   @IsString({ message: 'validation.string' })
   jobDescription?: string;
-
-  @ApiPropertyOptional({
-    description:
-      'Existing guest session id. Omit to auto-create a new free-trial session.',
-  })
-  @IsOptional()
-  @IsString({ message: 'validation.string' })
-  sessionId?: string;
-
-  @ApiPropertyOptional({
-    description: 'Optional email to attach to the session.',
-  })
-  @IsOptional()
-  @IsEmail({}, { message: 'validation.email' })
-  email?: string;
 }
 
 export class ParsedJobDto {
@@ -201,9 +186,10 @@ export class AnalysisResponseDto {
   createdAt: Date;
 
   @ApiProperty({
-    description: 'Session token to reuse for follow-up requests',
+    enum: ['SUPER_ADMIN', 'RECRUITER', 'JOB_SEEKER'],
+    description: 'Role of the JWT-authenticated account that ran the analysis',
   })
-  sessionToken: string;
+  role: 'SUPER_ADMIN' | 'RECRUITER' | 'JOB_SEEKER';
 
   @ApiProperty({ description: 'Remaining credits after this evaluation' })
   creditsRemaining: number;

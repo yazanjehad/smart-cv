@@ -337,7 +337,7 @@ export class GeminiAiService
     try {
       const model = this.client.getGenerativeModel({
         model: this.modelName,
-        generationConfig: { responseMimeType: 'application/json' } as any,
+        generationConfig: { responseMimeType: 'application/json' },
       });
       const prompt =
         'You are an expert recruiter. Return ONLY JSON: ' +
@@ -538,7 +538,7 @@ export class GeminiAiService
     cv: ParsedCv | Record<string, any>,
     jd: string,
   ): MatchEvaluation {
-    const skills = ((cv as ParsedCv).skills ?? []) as string[];
+    const skills = (cv as ParsedCv).skills ?? [];
     const lower = jd.toLowerCase();
     const hits = skills.filter((s) => lower.includes(String(s).toLowerCase()));
     const score =

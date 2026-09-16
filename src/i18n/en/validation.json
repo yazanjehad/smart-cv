@@ -1,0 +1,12 @@
+{
+  "required": "This field is required",
+  "string": "Must be a string",
+  "email": "Invalid email address",
+  "array": "Must be an array",
+  "number": "Must be a number",
+  "uuid": "Invalid identifier",
+  "boolean": "Must be a boolean",
+  "min": "Value is below the minimum allowed",
+  "max": "Value is above the maximum allowed",
+  "enum": "Value is not one of the allowed options"
+}

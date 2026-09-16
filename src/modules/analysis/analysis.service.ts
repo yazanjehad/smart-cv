@@ -1,15 +1,11 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
-import { MatchStatus } from '@prisma/client';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { MatchStatus, Role } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { GeminiAiService } from '../ai/services/gemini-ai.service';
 import { PdfExtractorService } from '../parser/pdf-extractor.service';
 import { UsersService } from '../users/users.service';
 import { PaymentRequiredException } from '../../common/exceptions/payment-required.exception';
+import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
 import type {
   AnalysisResult,
   ParsedCv,
@@ -20,11 +16,11 @@ import type {
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 export interface AnalyzeInput {
+  /** JWT-authenticated owner of the run (replaces the old session token). */
+  user: AuthenticatedUser;
   cvFile?: Express.Multer.File;
   jobFile?: Express.Multer.File;
   jobDescription?: string;
-  sessionId?: string;
-  email?: string;
 }
 
 export interface AnalysisResponsePayload {
@@ -43,7 +39,7 @@ export interface AnalysisResponsePayload {
   parsedCv: ParsedCv;
   parsedJob: ParsedJob;
   createdAt: Date;
-  sessionToken: string;
+  role: Role;
   creditsRemaining: number;
 }
 
@@ -66,17 +62,14 @@ export class AnalysisService {
   ) {}
   /**
    * Unified end-to-end pipeline:
-   * upload -> extract -> parse (parallel) -> score + tailor -> persist -> charge credit.
+   * auth + credit check -> extract -> parse (parallel) -> score + tailor ->
+   * persist atomically -> localized response.
    */
   async evaluate(
     input: AnalyzeInput,
   ): Promise<{ message: string; data: AnalysisResponsePayload }> {
-    // 1) Session resolution + pre-flight usage-limit (credit) check.
-    const sessionToken = this.users.resolveSessionToken(input.sessionId);
-    const user = await this.users.getOrCreateBySessionToken(
-      sessionToken,
-      input.email,
-    );
+    // 1) Authenticated user + pre-flight usage-limit (credit) check.
+    const { user } = input;
     this.users.assertHasCredits(user);
 
     // 2) PDF / text extraction.
@@ -176,6 +169,13 @@ export class AnalysisService {
           });
         }
 
+        // Usage analytics for SUPER_ADMIN consumption monitoring (a no-op when
+        // the account has no subscription row yet).
+        await tx.subscription.updateMany({
+          where: { userId: user.id },
+          data: { creditsUsed: { increment: 1 } },
+        });
+
         return {
           history: created,
           creditsRemaining: Math.max(0, user.credits - 1),
@@ -206,26 +206,14 @@ export class AnalysisService {
         parsedCv,
         parsedJob,
         createdAt: history.createdAt,
-        sessionToken: user.sessionToken,
+        role: user.role,
         creditsRemaining,
       },
     };
   }
 
-  /** Unified analysis history for a user/guest session. */
-  async history(sessionId?: string | null) {
-    const sessionToken = sessionId?.trim();
-    if (!sessionToken) {
-      throw new BadRequestException('analysis.messages.session_required');
-    }
-
-    const user = await this.prisma.user.findUnique({
-      where: { sessionToken },
-    });
-    if (!user) {
-      throw new NotFoundException('analysis.messages.session_not_found');
-    }
-
+  /** Unified analysis history for the JWT-authenticated account. */
+  async history(user: AuthenticatedUser) {
     const rows = await this.prisma.analysisHistory.findMany({
       where: { userId: user.id },
       include: {
@@ -242,6 +230,7 @@ export class AnalysisService {
       meta: {
         total: rows.length,
         creditsRemaining: user.credits,
+        role: user.role,
       },
     };
   }

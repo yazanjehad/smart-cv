@@ -13,4 +13,9 @@ export default registerAs('app', () => ({
   credits: {
     freeTrial: parseInt(process.env.FREE_TRIAL_CREDITS ?? '5', 10),
   },
+  jwt: {
+    secret: process.env.JWT_SECRET ?? 'smart-cv-dev-secret-change-me',
+    expiresIn: process.env.JWT_EXPIRES_IN ?? '1d',
+    saltRounds: parseInt(process.env.BCRYPT_SALT_ROUNDS ?? '10', 10),
+  },
 }));

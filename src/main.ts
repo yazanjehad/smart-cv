@@ -45,7 +45,6 @@ async function bootstrap() {
       'Accept-Language',
       'Content-Type',
       'x-lang',
-      'x-session-id',
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
   });

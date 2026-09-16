@@ -10,4 +10,7 @@ export const envValidationSchema = Joi.object({
   GEMINI_MODEL: Joi.string().default('gemini-3.6-flash'),
   FALLBACK_LANGUAGE: Joi.string().default('en'),
   FREE_TRIAL_CREDITS: Joi.number().integer().min(0).default(5),
+  JWT_SECRET: Joi.string().min(16).default('smart-cv-dev-secret-change-me'),
+  JWT_EXPIRES_IN: Joi.string().default('1d'),
+  BCRYPT_SALT_ROUNDS: Joi.number().integer().min(4).max(15).default(10),
 });

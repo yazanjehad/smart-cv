@@ -19,17 +19,22 @@ export type I18nTranslations = {
             "session_not_found": string;
         };
     };
-    "common": {
-        "validation": {
-            "required": string;
-            "string": string;
-            "email": string;
-            "array": string;
-            "number": string;
-            "uuid": string;
-            "boolean": string;
-            "min": string;
+    "auth": {
+        "messages": {
+            "registered": string;
+            "logged_in": string;
+            "profile": string;
         };
+        "errors": {
+            "email_taken": string;
+            "invalid_credentials": string;
+            "unauthorized": string;
+            "token_expired": string;
+            "forbidden": string;
+            "inactive_account": string;
+        };
+    };
+    "common": {
         "candidates": {
             "messages": {
                 "created": string;
@@ -70,6 +75,29 @@ export type I18nTranslations = {
                 "payment_required": string;
             };
         };
+    };
+    "users": {
+        "messages": {
+            "profile": string;
+            "list": string;
+            "credits_granted": string;
+            "subscription_updated": string;
+        };
+        "errors": {
+            "not_found": string;
+        };
+    };
+    "validation": {
+        "required": string;
+        "string": string;
+        "email": string;
+        "array": string;
+        "number": string;
+        "uuid": string;
+        "boolean": string;
+        "min": string;
+        "max": string;
+        "enum": string;
     };
 };
 /* prettier-ignore */
