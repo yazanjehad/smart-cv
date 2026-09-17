@@ -65,9 +65,9 @@ async function bootstrap() {
   );
 
   const config = new DocumentBuilder()
-    .setTitle('Smart CV Parser & Matcher API')
+    .setTitle('Smart CV SaaS API')
     .setDescription(
-      'Enterprise engine: PDF parsing, Gemini structured extraction, JD matching',
+      'Unified v1 SaaS pipeline — JWT authentication (register / login / me), account, subscription & credit management, and end-to-end CV-vs-job analysis (extract → Gemini parse → match score → tailored CV advice) with atomic credit deduction.',
     )
     .setVersion('1.0')
     .addBearerAuth(
@@ -75,19 +75,17 @@ async function bootstrap() {
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
-        description: 'Access token',
+        description:
+          'Access token issued by POST /api/v1/auth/register or POST /api/v1/auth/login',
       },
       'access-token',
     )
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        description: 'OTP token',
-      },
-      'otp-token',
+    .addTag('auth', 'Register, login and current-account profile')
+    .addTag(
+      'users',
+      'Account details, credit balance and SUPER_ADMIN administration',
     )
+    .addTag('analysis', 'CV-vs-job evaluation pipeline and per-account history')
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);

@@ -43,7 +43,7 @@ export interface AnalysisResponsePayload {
   creditsRemaining: number;
 }
 
-/** Deterministic score -> status thresholds shared with the matching module. */
+/** Deterministic score -> status thresholds shared by the pipeline. */
 export function deriveMatchStatus(score: number): MatchStatus {
   if (score >= 80) return MatchStatus.MATCHED;
   if (score >= 50) return MatchStatus.SHORTLISTED;

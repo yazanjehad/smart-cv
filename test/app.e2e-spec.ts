@@ -181,43 +181,24 @@ describe('smart_cv_api (e2e) — JWT auth, RBAC & credits', () => {
   });
 
   describe('RBAC (@Roles)', () => {
-    it('forbids a JOB_SEEKER from the recruiter job board (localized 403, ar)', async () => {
-      const token = await login(SEEDED.jobSeeker);
-
-      const res = await request(app.getHttpServer())
-        .get('/api/jobs')
-        .set('Authorization', bearer(token))
-        .set('Accept-Language', 'ar')
-        .expect(403);
-      expect(isArabic(res.body.message)).toBe(true);
-    });
-
-    it('forbids a JOB_SEEKER from the recruiter-only matching evaluator', async () => {
-      const token = await login(SEEDED.jobSeeker);
+    it('rejects removed legacy routes with 404 (parser / candidates / matching)', async () => {
+      const token = await login(SEEDED.recruiter);
 
       await request(app.getHttpServer())
         .post('/api/matching/evaluate')
         .set('Authorization', bearer(token))
-        .send({ jobId: 'ignored-because-the-guard-runs-first' })
-        .expect(403);
-    });
-
-    it('allows a RECRUITER into the job board', async () => {
-      const token = await login(SEEDED.recruiter);
+        .send({ jobId: 'ignored — route removed by v1 cleanup' })
+        .expect(404);
 
       await request(app.getHttpServer())
         .get('/api/jobs')
         .set('Authorization', bearer(token))
-        .expect(200);
-    });
+        .expect(404);
 
-    it('allows a JOB_SEEKER to read their own candidate matches', async () => {
-      const token = await login(SEEDED.jobSeeker);
-
-      const res = await request(app.getHttpServer())
+      await request(app.getHttpServer())
         .get('/api/matching/candidates/00000000-0000-0000-0000-000000000000')
-        .set('Authorization', bearer(token));
-      expect(res.status).not.toBe(403);
+        .set('Authorization', bearer(token))
+        .expect(404);
     });
 
     it('forbids a RECRUITER from the SUPER_ADMIN account list', async () => {

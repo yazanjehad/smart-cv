@@ -216,7 +216,7 @@ Responsibilities:
 /* ═════════════════════════════════════════════════════════════════════════ */
 /*  Seed Data — Candidates (3) with Parsed CVs                              */
 /*  Each candidate has both flat DB columns and a structured JSON payload   */
-/*  that mirrors the GeminiAiService.extractStructuredCv() output shape.    */
+/*  that mirrors the GeminiAiService.parseCv() output shape.    */
 /* ═════════════════════════════════════════════════════════════════════════ */
 
 /* ── Candidate 1: Strong match for Job 1 (محمد أحمد السعيد) ── */

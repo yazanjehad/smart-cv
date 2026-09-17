@@ -35,39 +35,6 @@ export type I18nTranslations = {
         };
     };
     "common": {
-        "candidates": {
-            "messages": {
-                "created": string;
-                "list": string;
-                "detail": string;
-                "updated": string;
-                "deleted": string;
-                "not_found": string;
-            };
-        };
-        "jobs": {
-            "messages": {
-                "created": string;
-                "list": string;
-                "detail": string;
-                "updated": string;
-                "deleted": string;
-                "not_found": string;
-            };
-        };
-        "parser": {
-            "messages": {
-                "parse_success": string;
-                "no_raw_text": string;
-            };
-        };
-        "matching": {
-            "messages": {
-                "evaluated": string;
-                "top_candidates": string;
-                "candidate_matches": string;
-            };
-        };
         "common": {
             "errors": {
                 "internal_server_error": string;

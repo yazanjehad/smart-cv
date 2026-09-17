@@ -21,9 +21,6 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { I18nResponseInterceptor } from './common/interceptors/i18n-response.interceptor';
 import { AiModule } from './modules/ai/ai.module';
 import { ParserModule } from './modules/parser/parser.module';
-import { CandidatesModule } from './modules/candidates/candidates.module';
-import { JobsModule } from './modules/jobs/jobs.module';
-import { MatchingModule } from './modules/matching/matching.module';
 import { AnalysisModule } from './modules/analysis/analysis.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AppController } from './app.controller';
@@ -58,9 +55,6 @@ import { AppService } from './app.service';
     PrismaModule,
     AiModule,
     ParserModule,
-    CandidatesModule,
-    JobsModule,
-    MatchingModule,
     AuthModule,
     AnalysisModule,
   ],

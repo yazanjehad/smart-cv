@@ -1,5 +1,3 @@
-export const AI_PROVIDER_TOKEN = Symbol('AI_PROVIDER_TOKEN');
-
 export interface ParsedExperience {
   jobTitle?: string;
   company?: string;
@@ -28,22 +26,6 @@ export interface ParsedCv {
   experience: ParsedExperience[];
   education: ParsedEducation[];
   yearsOfExperience?: number;
-}
-
-export interface MatchEvaluation {
-  score: number; // 0-100
-  strengths: string[];
-  missingSkills: string[];
-  reasoning: string;
-}
-
-export interface ICvDataExtractor {
-  extractStructuredCv(rawText: string): Promise<ParsedCv>;
-  evaluateMatch(
-    structuredCv: ParsedCv | Record<string, any>,
-    jobDescription: string,
-    jobRequirements?: string[],
-  ): Promise<MatchEvaluation>;
 }
 
 // ---------------------------------------------------------------------------
@@ -92,13 +74,8 @@ export interface AnalysisResult {
   tailoredAdvice: TailoredAdvice;
 }
 
-export interface IJobParser {
-  parseJob(rawJobText: string): Promise<ParsedJob>;
-}
-
-export interface ISmartAnalysisProvider extends ICvDataExtractor, IJobParser {
+export interface ISmartAnalysisProvider {
   parseCv(rawText: string): Promise<ParsedCv>;
+  parseJob(rawJobText: string): Promise<ParsedJob>;
   evaluateAndTailor(cv: ParsedCv, job: ParsedJob): Promise<AnalysisResult>;
 }
-
-export interface AiProvider extends ICvDataExtractor {}

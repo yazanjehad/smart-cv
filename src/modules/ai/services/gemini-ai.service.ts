@@ -3,9 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import {
   AnalysisResult,
-  ICvDataExtractor,
   ISmartAnalysisProvider,
-  MatchEvaluation,
   ParsedCv,
   ParsedJob,
   TailoredAdvice,
@@ -16,9 +14,7 @@ const MAX_PROMPT_CHARS = 15000;
 const MAX_JSON_CHARS = 12000;
 
 @Injectable()
-export class GeminiAiService
-  implements ICvDataExtractor, ISmartAnalysisProvider
-{
+export class GeminiAiService implements ISmartAnalysisProvider {
   private readonly logger = new Logger(GeminiAiService.name);
   private readonly client: GoogleGenerativeAI | null = null;
   private readonly modelName: string;
@@ -321,48 +317,6 @@ export class GeminiAiService
     }
   }
   // -------------------------------------------------------------------------
-  // Legacy compatibility API (ParserService / MatchingService)
-  // -------------------------------------------------------------------------
-
-  extractStructuredCv(rawText: string): Promise<ParsedCv> {
-    return this.parseCv(rawText);
-  }
-
-  async evaluateMatch(
-    structuredCv: ParsedCv | Record<string, any>,
-    jobDescription: string,
-    jobRequirements: string[] = [],
-  ): Promise<MatchEvaluation> {
-    if (!this.client) return this.fallbackMatch(structuredCv, jobDescription);
-    try {
-      const model = this.client.getGenerativeModel({
-        model: this.modelName,
-        generationConfig: { responseMimeType: 'application/json' },
-      });
-      const prompt =
-        'You are an expert recruiter. Return ONLY JSON: ' +
-        '{score 0-100, strengths[], missingSkills[], reasoning}. ' +
-        'Candidate: ' +
-        JSON.stringify(structuredCv).slice(0, 8000) +
-        ' Job: ' +
-        jobDescription.slice(0, 8000) +
-        ' Requirements: ' +
-        JSON.stringify(jobRequirements);
-      const result = await model.generateContent(prompt);
-      const json = this.extractJson(result.response.text());
-      return {
-        score: this.clampScore(json.score),
-        strengths: this.toStringArray(json.strengths),
-        missingSkills: this.toStringArray(json.missingSkills),
-        reasoning: String(json.reasoning ?? ''),
-      };
-    } catch (e) {
-      this.logger.error(`Gemini match failed: ${(e as Error).message}`);
-      return this.fallbackMatch(structuredCv, jobDescription);
-    }
-  }
-
-  // -------------------------------------------------------------------------
   // Internals
   // -------------------------------------------------------------------------
 
@@ -531,25 +485,6 @@ export class GeminiAiService
       softSkills: [],
       domainKeywords: [],
       requirements: bulletLines.slice(0, 12),
-    };
-  }
-
-  private fallbackMatch(
-    cv: ParsedCv | Record<string, any>,
-    jd: string,
-  ): MatchEvaluation {
-    const skills = (cv as ParsedCv).skills ?? [];
-    const lower = jd.toLowerCase();
-    const hits = skills.filter((s) => lower.includes(String(s).toLowerCase()));
-    const score =
-      skills.length === 0
-        ? 10
-        : Math.round((hits.length / skills.length) * 100);
-    return {
-      score,
-      strengths: hits,
-      missingSkills: [],
-      reasoning: 'Fallback heuristic match (Gemini unavailable).',
     };
   }
 
